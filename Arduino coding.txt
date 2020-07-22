@@ -1,0 +1,180 @@
+#include <SPI.h> 
+#include <Ethernet.h>
+ byte mac[] = { 0x12, 0x9A, 0xAB, 0xAC, 0x2E, 0xA2 };
+ byte ip[] = {192,168,64,37}; 
+byte serv[]= {192,168,64,36} ; 
+//Enter the IPv4 address EthernetClient cliente;
+int temp = 0; 
+float tem;
+int red,green,blue;
+boolean bisraining=false; 
+String rainStatus; 
+int pinDHT11=2; 
+void setup() {
+Serial.begin(115200);
+Ethernet.begin(mac, ip);
+pinMode(A0,INPUT); 
+}
+int confirm(int pin, int us, byte level) 
+{
+int cnt = us / 10 + 1; 
+bool ok = false;
+for (int i = 0; i < cnt; i++) 
+{
+if (digitalRead(pin) != level) 
+{
+ok = true; 
+break;
+}
+delayMicroseconds(10);
+}
+if (!ok) 
+{ 
+return -1;
+}
+return 0;
+}
+byte bits2byte(byte data[8]) 
+{
+byte v = 0; 
+for (int i = 0; i < 8; i++)
+{
+ v += data[i] << (7 - i); 
+}
+return v; 
+}
+int read(int pin, byte* ptemperature, byte* phumidity, byte pdata[40])
+{
+int ret = 0; 
+byte data[40] = {0};
+memset(data, 0, 40); 
+pinMode(pin, OUTPUT); 
+digitalWrite(pin, LOW);
+delay(20); //bydefault delay return in miliseconds
+digitalWrite(pin, HIGH);
+delayMicroseconds(30);
+pinMode(pin, INPUT); 
+if (confirm(pin, 80, LOW)) 
+{
+return 100;
+}
+if (confirm(pin, 80, HIGH)) 
+{
+return 101; 
+}
+for (int j = 0; j < 40; j++)
+{
+if (confirm(pin, 50, LOW)) 
+{
+return 102;
+}
+bool ok = false;
+int tick = 0;
+for (int i = 0; i < 8; i++, tick++)
+{
+if (digitalRead(pin) != HIGH) 
+{
+ok = true; break; 
+}
+delayMicroseconds(10);
+}
+if (!ok)
+{
+return 103; 
+}
+data[j] = (tick > 3? 1:0);
+}
+if (confirm(pin, 50, LOW)) 
+{
+return 104;
+}
+byte humidity = bits2byte(data);
+byte humidity2 = bits2byte(data + 8);
+byte temperature = bits2byte(data + 16);
+byte temperature2 = bits2byte(data + 24);
+byte check = bits2byte(data + 32);
+byte expect = humidity + humidity2 + temperature + temperature2;
+if (check != expect)
+{
+return 105; 
+}
+*ptemperature = temperature;
+*phumidity = humidity;
+if (pdata)
+{
+memcpy(pdata, data, 40);
+}
+if (ptemperature) 
+{ 
+*ptemperature = temperature; 
+}
+if (phumidity)
+{
+*phumidity = humidity; 
+}
+return ret;
+}
+void loop()
+{
+if (!cliente.connect(serv, 80)) { 
+//RainfallSensor
+ int nrailval=analogRead(A0); 
+bisraining=!(digitalRead(0));
+if(bisraining) rainStatus="YES";
+temp = 2;
+}
+else 
+{
+rainStatus="NO"; 
+temp = 0; 
+Serial.print("Raining?: ");
+Serial.print(rainStatus);
+Serial.print("\t Moisture Level: ");
+//Serial.println(nrailval);
+//DHT11
+ Serial.println("======================== ========="); 
+byte temperature = 0;
+byte humidity = 0;
+if (read(pinDHT11, &temperature, &humidity, NULL)) 
+{ 
+Serial.print("Read DHT11 failed.");
+Serial.print("Sample OK: ");
+Serial.print((int)temperature);
+Serial.print(" *C, ");
+Serial.print((int)humidity);
+Serial.println(" %");
+//RGB Color sensor
+red=analogRead(A3);
+green=analogRead(A2); 
+blue=analogRead(A1); 
+Serial.print("RED = "); 
+Serial.print(red); 
+Serial.print("\tBLUE = ");
+Serial.print(blue); 
+Serial.print("\tGREEN = "); 
+Serial.print(green); Serial.println();
+//Connecting at the IP address and port we saved before 
+Serial.println("connected"); 
+cliente.print("GET /ethernet/data.php?");
+//Connecting and Sending values to database
+ cliente.print("temperature=");
+ cliente.print((int)temperature);
+ cliente.print("&humidity=");
+ cliente.print((int)humidity);
+ cliente.print("&lux=");
+ cliente.print(lux); 
+ cliente.print("&rainfall=");
+ cliente.print(rainStatus);
+ cliente.print("&moisture=");
+ cliente.print(nrailval);
+ cliente.print("&red=");
+ cliente.print(red);
+ cliente.print("&green=");
+ cliente.print(green);
+ cliente.print("&blue=");
+ cliente.println(blue);
+ cliente.stop();
+ delay(30000); 
+}
+}
+}
